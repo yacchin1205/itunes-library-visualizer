@@ -43,4 +43,16 @@ public interface LibraryService {
 	 *            ライブラリ名。nullは不可。
 	 */
 	public PairingStatus startPairing(String libraryName);
+
+	/**
+	 * セッションを開きます。
+	 * 
+	 * @param target
+	 *            対象セッション。nullは不可。
+	 * @return セッション。
+	 * @throws IOException
+	 *             入出力関係のエラー。
+	 */
+	public LibrarySession openSession(AccessCode target) throws IOException;
+
 }

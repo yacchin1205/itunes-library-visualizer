@@ -16,8 +16,17 @@ import net.yzwlab.daap.AccessCode;
 import net.yzwlab.daap.AccessCodeListener;
 import net.yzwlab.daap.AccessCodeRepository;
 import net.yzwlab.daap.LibraryService;
+import net.yzwlab.daap.LibrarySession;
 import net.yzwlab.daap.PairingStatus;
+import net.yzwlab.daap.TrackDescription;
 
+import org.dyndns.jkiddo.dmap.chunks.Chunk;
+import org.dyndns.jkiddo.dmap.chunks.daap.SongAlbum;
+import org.dyndns.jkiddo.dmap.chunks.daap.SongArtist;
+import org.dyndns.jkiddo.dmap.chunks.dmap.ItemName;
+import org.dyndns.jkiddo.dmap.chunks.dmap.ListingItem;
+import org.dyndns.jkiddo.service.daap.client.Library;
+import org.dyndns.jkiddo.service.daap.client.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.tunesremote.daap.Paired;
@@ -189,6 +198,14 @@ public class LibraryServiceImpl implements ServiceListener,
 		};
 	}
 
+	@Override
+	public LibrarySession openSession(AccessCode target) throws IOException {
+		if (target == null) {
+			throw new IllegalArgumentException();
+		}
+		return new SessionImpl(target);
+	}
+
 	/**
 	 * 既知のアクセスコード情報を検索します。
 	 * 
@@ -353,6 +370,157 @@ public class LibraryServiceImpl implements ServiceListener,
 			accessCode.setAddress(address);
 			accessCode.setCode(code);
 			notifyAccessCodeFound(accessCode);
+		}
+
+	}
+
+	/**
+	 * セッションの実装です。
+	 */
+	private class SessionImpl implements LibrarySession {
+
+		/**
+		 * コアとなるセッションを保持します。
+		 */
+		private Session session;
+
+		/**
+		 * 構築します。
+		 * 
+		 * @param accessCode
+		 *            アクセスコード。nullは不可。
+		 * @throws IOException
+		 *             入出力関係のエラー。
+		 */
+		public SessionImpl(AccessCode accessCode) throws IOException {
+			if (accessCode == null) {
+				throw new IllegalArgumentException();
+			}
+			try {
+				this.session = new Session(accessCode.getAddress(),
+						accessCode.getPort(), accessCode.getCode());
+			} catch (IOException e) {
+				throw e;
+			} catch (Exception e) {
+				throw new IOException(e);
+			}
+		}
+
+		@Override
+		public void close() throws IOException {
+			try {
+				session.logout();
+			} catch (IOException e) {
+				throw e;
+			} catch (Exception e) {
+				throw new IOException(e);
+			}
+		}
+
+		@Override
+		public Iterable<TrackDescription> getAllTracks() throws IOException {
+			try {
+				Library library = session.getLibrary();
+				List<TrackDescription> r = new ArrayList<TrackDescription>();
+				for (ListingItem item : library.getAllTracks().getListing()
+						.getListingItems()) {
+					r.add(new TrackDescriptionImpl(item));
+				}
+				return r;
+			} catch (IOException e) {
+				throw e;
+			} catch (Exception e) {
+				throw new IOException(e);
+			}
+		}
+
+		/**
+		 * 説明の抽象基底クラスです。
+		 */
+		private abstract class AbstractDescription {
+
+			/**
+			 * コアとなるアイテムを保持します。
+			 */
+			private ListingItem item;
+
+			/**
+			 * 構築します。
+			 * 
+			 * @param item
+			 *            アイテム。nullは不可。
+			 */
+			public AbstractDescription(ListingItem item) {
+				if (item == null) {
+					throw new IllegalArgumentException();
+				}
+				this.item = item;
+			}
+
+			/**
+			 * チャンクを取得します。
+			 * 
+			 * @param clazz
+			 *            チャンクのクラス。nullは不可。
+			 * @return チャンク。見つからなかった場合はnull。
+			 */
+			protected <T extends Chunk> T getChunk(Class<T> clazz) {
+				if (clazz == null) {
+					throw new IllegalArgumentException();
+				}
+				for (Chunk chunk : item) {
+					if (clazz.isInstance(chunk)) {
+						return clazz.cast(chunk);
+					}
+				}
+				return null;
+			}
+
+		}
+
+		/**
+		 * トラックの説明を定義します。
+		 */
+		private class TrackDescriptionImpl extends AbstractDescription
+				implements TrackDescription {
+
+			/**
+			 * 構築します。
+			 * 
+			 * @param item
+			 *            アイテム。nullは不可。
+			 */
+			public TrackDescriptionImpl(ListingItem item) {
+				super(item);
+			}
+
+			@Override
+			public String getName() {
+				ItemName itemName = getChunk(ItemName.class);
+				if (itemName == null) {
+					return null;
+				}
+				return itemName.getValue();
+			}
+
+			@Override
+			public String getArtistId() {
+				SongArtist artist = getChunk(SongArtist.class);
+				if (artist == null) {
+					return null;
+				}
+				return artist.getValue();
+			}
+
+			@Override
+			public String getAlbumId() {
+				SongAlbum album = getChunk(SongAlbum.class);
+				if (album == null) {
+					return null;
+				}
+				return album.getValue();
+			}
+
 		}
 
 	}

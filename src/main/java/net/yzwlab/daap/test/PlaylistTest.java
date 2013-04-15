@@ -19,16 +19,13 @@ import java.util.UUID;
 import net.yzwlab.daap.AccessCode;
 import net.yzwlab.daap.AccessCodeListener;
 import net.yzwlab.daap.LibraryService;
+import net.yzwlab.daap.LibrarySession;
+import net.yzwlab.daap.TrackDescription;
 import net.yzwlab.daap.impl.LibraryServiceImpl;
 import net.yzwlab.daap.io.PropertiesAccessCodeRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.tunesremote.TagListener;
-import org.tunesremote.daap.Library;
-import org.tunesremote.daap.Playlist;
-import org.tunesremote.daap.Response;
-import org.tunesremote.daap.Session;
 
 /**
  * テストプログラムです。
@@ -135,14 +132,14 @@ public class PlaylistTest implements AccessCodeListener {
 			this.accessCodes = new PropertiesAccessCodeRepository(
 					new Properties());
 		}
-		LibraryService service = new LibraryServiceImpl(
-				DEVICE_NAME, DEVICE_TYPE, deviceId, accessCodes);
+		LibraryService service = new LibraryServiceImpl(DEVICE_NAME,
+				DEVICE_TYPE, deviceId, accessCodes);
 		service.addAccessCodeListener(this);
 
 		for (AccessCode knownLib : accessCodes) {
 			if (knownLib.getCode() != null && knownLib.getAddress() != null
 					&& knownLib.getPort() > 0) {
-				testAccess(knownLib);
+				testAccess(service, knownLib);
 			}
 		}
 		service.start();
@@ -200,62 +197,42 @@ public class PlaylistTest implements AccessCodeListener {
 				th.printStackTrace();
 			}
 		} else {
-			testAccess(accessCode);
+			testAccess(service, accessCode);
 		}
 	}
 
 	@Override
-	public void accessCodeFound(LibraryService service,
-			AccessCode accessCode) {
+	public void accessCodeFound(LibraryService service, AccessCode accessCode) {
 		if (service == null || accessCode == null) {
 			throw new IllegalArgumentException();
 		}
 		saveProperties(service);
 
-		testAccess(accessCode);
+		testAccess(service, accessCode);
 	}
 
 	/**
 	 * アクセステストを行います。
 	 * 
+	 * @param service
+	 *            サービス。nullは不可。
 	 * @param accessCode
 	 *            アクセスコード。nullは不可。
 	 */
-	private void testAccess(AccessCode accessCode) {
-		if (accessCode == null) {
+	private void testAccess(LibraryService service, AccessCode accessCode) {
+		if (service == null || accessCode == null) {
 			throw new IllegalArgumentException();
 		}
 		logger.info("アクセステスト: " + accessCode.getAddress() + ":"
 				+ accessCode.getPort());
 		try {
-			Session session = new Session(accessCode.getAddress(),
-					accessCode.getCode(), accessCode.getPort());
-			Library lib = new Library(session);
-			for (Playlist playlist : session.playlists) {
-				System.out.println("Playlist: " + playlist.getName());
-				lib.readPlaylist(String.valueOf(playlist.getID()),
-						new TagListener() {
-
-							@Override
-							public void foundTag(String tag, Response resp) {
-								System.out.println("Tag: " + tag);
-								for (String key : resp.keySet()) {
-									if ("asal".equalsIgnoreCase(key) == false
-											&& "minm".equalsIgnoreCase(key) == false) {
-										continue;
-									}
-									System.out.println("+ " + key + ": "
-											+ resp.get(key));
-								}
-							}
-
-							@Override
-							public void searchDone() {
-								System.out.println("done");
-							}
-
-						});
+			LibrarySession session = service.openSession(accessCode);
+			for (TrackDescription desc : session.getAllTracks()) {
+				System.out.println("Song: " + desc.getName() + "(album="
+						+ desc.getAlbumId() + ", artist=" + desc.getArtistId()
+						+ ")");
 			}
+			System.out.println("done");
 
 			// 再生状況の取得
 			// new TestStatusHandler(session);

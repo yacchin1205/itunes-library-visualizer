@@ -1,7 +1,5 @@
 package net.yzwlab.daap;
 
-import org.tunesremote.daap.Status;
-
 /**
  * 状態の監視用インタフェースです。
  */
@@ -15,6 +13,6 @@ public interface StatusListener {
 	 * @param updated
 	 *            更新された状態。nullは不可。
 	 */
-	public void statusUpdated(Status source, StatusUpdate updated);
+	public void statusUpdated(LibrarySession source, StatusUpdate updated);
 
 }

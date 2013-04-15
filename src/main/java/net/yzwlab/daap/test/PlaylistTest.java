@@ -225,8 +225,9 @@ public class PlaylistTest implements AccessCodeListener {
 		}
 		logger.info("アクセステスト: " + accessCode.getAddress() + ":"
 				+ accessCode.getPort());
+		LibrarySession session = null;
 		try {
-			LibrarySession session = service.openSession(accessCode);
+			session = service.openSession(accessCode);
 			for (TrackDescription desc : session.getAllTracks()) {
 				System.out.println("Song: " + desc.getName() + "(album="
 						+ desc.getAlbumId() + ", artist=" + desc.getArtistId()
@@ -234,10 +235,17 @@ public class PlaylistTest implements AccessCodeListener {
 			}
 			System.out.println("done");
 
-			// 再生状況の取得
-			// new TestStatusHandler(session);
 		} catch (Exception e) {
 			e.printStackTrace();
+		} finally {
+			if (session != null) {
+				try {
+					session.close();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				session = null;
+			}
 		}
 	}
 

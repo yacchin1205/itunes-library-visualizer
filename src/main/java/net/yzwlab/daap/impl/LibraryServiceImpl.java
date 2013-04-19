@@ -153,7 +153,7 @@ public class LibraryServiceImpl implements ServiceListener,
 	@Override
 	public void serviceAdded(ServiceEvent event) {
 		final String name = event.getName();
-		logger.debug("Event: " + name);
+		logger.info("Event: " + name);
 		notifyFound(event.getDNS(), name);
 	}
 
@@ -164,13 +164,13 @@ public class LibraryServiceImpl implements ServiceListener,
 
 	@Override
 	public void serviceResolved(ServiceEvent event) {
-		logger.debug("Event: " + event.getName());
+		logger.info("Event: " + event.getName());
 		;
 	}
 
 	@Override
 	public void serviceTypeAdded(ServiceEvent event) {
-		logger.debug("ServiceTypeAdded: " + event.getType());
+		logger.info("ServiceTypeAdded: " + event.getType());
 	}
 
 	@Override

@@ -1,4 +1,4 @@
-package net.yzwlab.daap.test;
+package net.yzwlab.daap.util;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -19,26 +19,13 @@ import java.util.UUID;
 import net.yzwlab.daap.AccessCode;
 import net.yzwlab.daap.AccessCodeListener;
 import net.yzwlab.daap.LibraryService;
-import net.yzwlab.daap.LibrarySession;
-import net.yzwlab.daap.TrackDescription;
 import net.yzwlab.daap.impl.LibraryServiceImpl;
 import net.yzwlab.daap.io.PropertiesAccessCodeRepository;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
- * テストプログラムです。
+ * CLIの抽象基底クラスです。
  */
-public class PlaylistTest implements AccessCodeListener {
-
-	/**
-	 * Logger
-	 */
-	private final static Logger logger = LoggerFactory
-			.getLogger(PlaylistTest.class);
-
-	private static final String DEVICE_NAME = "jsimpledaap-Test";
+public abstract class AbstractCLI implements AccessCodeListener {
 
 	/**
 	 * パラメータを定義します。
@@ -46,25 +33,14 @@ public class PlaylistTest implements AccessCodeListener {
 	private static final String PARAM_DEVICE_ID = "net.yzwlab.deviceId";
 
 	/**
-	 * 実行します。
-	 * 
-	 * @param args
-	 *            引数。nullは不可。
-	 * @throws Exception
-	 *             エラー。
-	 */
-	public static void main(String[] args) throws Exception {
-		if (args == null) {
-			throw new IllegalArgumentException();
-		}
-
-		new PlaylistTest(new File("remote.properties"));
-	}
-
-	/**
 	 * プロパティファイルを保持します。
 	 */
 	private File propertiesFile;
+
+	/**
+	 * デバイス名を保持します。
+	 */
+	private String deviceName;
 
 	/**
 	 * 認識されているライブラリのリストを保持します。
@@ -92,23 +68,32 @@ public class PlaylistTest implements AccessCodeListener {
 	private PropertiesAccessCodeRepository accessCodes;
 
 	/**
-	 * テストプログラムを構築します。
+	 * サービスを保持します。
+	 */
+	private LibraryService service;
+
+	/**
+	 * 実行プログラムを構築します。
 	 * 
 	 * @param propertiesFile
 	 *            プロパティ。nullは不可。
+	 * @param deviceName
+	 *            デバイス名。nullは不可。
+	 * @param deviceType
+	 *            デバイスタイプ。nullは不可。
 	 * @throws IOException
 	 *             入出力関係のエラー。
 	 */
-	public PlaylistTest(File propertiesFile) throws IOException {
-		if (propertiesFile == null) {
+	public AbstractCLI(File propertiesFile, String deviceName, String deviceType)
+			throws IOException {
+		if (propertiesFile == null || deviceName == null || deviceType == null) {
 			throw new IllegalArgumentException();
 		}
 		this.propertiesFile = propertiesFile;
+		this.deviceName = deviceName;
 		this.libraryCodes = new ArrayList<AccessCode>();
 		this.selected = false;
 		this.stdin = new BufferedReader(new InputStreamReader(System.in));
-
-		final String DEVICE_TYPE = "YZWLAB";
 
 		if (propertiesFile.exists()) {
 			Properties props = new Properties();
@@ -130,25 +115,9 @@ public class PlaylistTest implements AccessCodeListener {
 			this.accessCodes = new PropertiesAccessCodeRepository(
 					new Properties());
 		}
-		LibraryService service = new LibraryServiceImpl(DEVICE_NAME,
-				DEVICE_TYPE, deviceId, accessCodes);
+		service = new LibraryServiceImpl(deviceName, deviceType, deviceId,
+				accessCodes);
 		service.addAccessCodeListener(this);
-
-		for (AccessCode knownLib : accessCodes) {
-			if (knownLib.getCode() != null && knownLib.getAddress() != null
-					&& knownLib.getPort() > 0) {
-				testAccess(service, knownLib);
-			}
-		}
-		service.start();
-	}
-
-	@Override
-	public void errorDetected(LibraryService service, Throwable error) {
-		if (service == null || error == null) {
-			throw new IllegalArgumentException();
-		}
-		error.printStackTrace();
 	}
 
 	@Override
@@ -189,13 +158,13 @@ public class PlaylistTest implements AccessCodeListener {
 				System.out.println("接続待機: " + targetAccessCode.getLibraryName()
 						+ "  (" + targetAccessCode.getAddress() + ":"
 						+ targetAccessCode.getPort() + ") iTunesの[デバイス]内["
-						+ DEVICE_NAME + "]をクリックし、[1111]を入力してください。");
+						+ deviceName + "]をクリックし、[1111]を入力してください。");
 				service.startPairing(targetAccessCode.getLibraryName());
 			} catch (Throwable th) {
 				th.printStackTrace();
 			}
 		} else {
-			testAccess(service, accessCode);
+			codeFound(service, accessCode);
 		}
 	}
 
@@ -206,7 +175,40 @@ public class PlaylistTest implements AccessCodeListener {
 		}
 		saveProperties(service);
 
-		testAccess(service, accessCode);
+		codeFound(service, accessCode);
+	}
+
+	/**
+	 * 破棄します。
+	 * 
+	 * @throws IOException
+	 *             入出力関係のエラー。
+	 */
+	public void dispose() throws IOException {
+		if (service == null) {
+			return;
+		}
+		service.dispose();
+		service = null;
+	}
+
+	/**
+	 * 開始します。
+	 * 
+	 * @throws IOException
+	 *             入出力関係のエラー。
+	 */
+	public void start() throws IOException {
+		for (AccessCode knownLib : accessCodes) {
+			if (knownLib.getCode() != null && knownLib.getAddress() != null
+					&& knownLib.getPort() > 0 && service != null) {
+				codeFound(service, knownLib);
+			}
+		}
+		if (service == null) {
+			return;
+		}
+		service.start();
 	}
 
 	/**
@@ -217,36 +219,15 @@ public class PlaylistTest implements AccessCodeListener {
 	 * @param accessCode
 	 *            アクセスコード。nullは不可。
 	 */
-	private void testAccess(LibraryService service, AccessCode accessCode) {
-		if (service == null || accessCode == null) {
-			throw new IllegalArgumentException();
-		}
-		logger.info("アクセステスト: " + accessCode.getAddress() + ":"
-				+ accessCode.getPort());
-		LibrarySession session = null;
-		try {
-			session = service.openSession(accessCode);
-			for (TrackDescription desc : session.getAllTracks()) {
-				System.out.println("Song: " + desc.getName() + "(album="
-						+ desc.getAlbumId() + ", artist=" + desc.getArtistId()
-						+ ")");
-			}
-			System.out.println("done");
+	protected abstract void codeFound(LibraryService service,
+			AccessCode accessCode);
 
-		} catch (Exception e) {
-			e.printStackTrace();
-		} finally {
-			if (session != null) {
-				try {
-					session.close();
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-				session = null;
-			}
-		}
-	}
-
+	/**
+	 * プロパティを保存します。
+	 * 
+	 * @param service
+	 *            サービス。nullは不可。
+	 */
 	private synchronized void saveProperties(LibraryService service) {
 		OutputStream out = null;
 		try {
